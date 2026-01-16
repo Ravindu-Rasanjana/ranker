@@ -921,9 +921,31 @@ def extract_student_name(results):
         return results['student_name']
     return None
 
+def get_grade_points(grade):
+    """Get numerical grade points for comparison. Higher is better."""
+    clean_grade = grade.strip().upper()
+    
+    # Special cases that should have lowest priority
+    if clean_grade in ['MC', 'WH', 'NC', 'CM', 'F', 'E']:
+        # Return grade points from the lookup table if available
+        if clean_grade in GRADE_POINTS:
+            return GRADE_POINTS[clean_grade]
+        # For NC and CM, return -1 as they shouldn't be counted but should be replaced if a real grade exists
+        elif clean_grade in ['NC', 'CM']:
+            return -1.0
+        else:
+            return 0.0
+    
+    # Regular grades from the lookup table
+    if clean_grade in GRADE_POINTS:
+        return GRADE_POINTS[clean_grade]
+    
+    # Unknown grades get lowest priority
+    return -2.0
+
 def extract_credits_and_grades(results, credit_mapping=None):
     """Extract credits and grades from results using external credit mapping"""
-    # First, process the results to handle duplicate subjects (like MC retakes)
+    # First, process the results to handle duplicate subjects (including multiple attempts)
     processed_subjects = {}
     
     if credit_mapping is None:
@@ -934,21 +956,29 @@ def extract_credits_and_grades(results, credit_mapping=None):
         if subject_with_details == 'student_name':
             continue
             
-        # Extract subject code (e.g., "SCS1301" from "SCS1301 Data Structures")
-        # Subject code is typically at the start and is alphanumeric
-        subject_code_match = re.match(r'([A-Z]{3}\d{4})', subject_with_details.strip())
+        # Extract subject code (e.g., "SCS1301" from "SCS1301 Data Structures" or "IS1201" from "IS1201 Programming")
+        # Subject code is typically at the start: 2-3 capital letters followed by 4 digits
+        subject_code_match = re.match(r'([A-Z]{2,3}\s?\d{4})', subject_with_details.strip())
         if not subject_code_match:
             print(f"⚠️ Could not extract subject code from: {subject_with_details}")
             continue
         
         subject_code = subject_code_match.group(1)
+        current_grade = grade.strip().upper()
         
-        # Store the grade in processed_subjects, but prefer non-MC grades
+        # Handle duplicate subjects - keep the highest grade
         if subject_code in processed_subjects:
-            existing_grade = processed_subjects[subject_code]
-            # If existing entry is MC and current is not MC, replace it
-            if existing_grade.strip().upper() == 'MC' and grade.strip().upper() != 'MC':
+            existing_grade = processed_subjects[subject_code].strip().upper()
+            
+            # Compare grades and keep the higher one
+            current_points = get_grade_points(current_grade)
+            existing_points = get_grade_points(existing_grade)
+            
+            if current_points > existing_points:
+                print(f"📊 Duplicate found for {subject_code}: Replacing {existing_grade} with higher grade {current_grade}")
                 processed_subjects[subject_code] = grade
+            else:
+                print(f"📊 Duplicate found for {subject_code}: Keeping existing grade {existing_grade} over {current_grade}")
         else:
             processed_subjects[subject_code] = grade
     
