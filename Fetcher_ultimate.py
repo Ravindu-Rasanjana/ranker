@@ -58,13 +58,40 @@ def check_dependencies():
             return False
     return True
 
+# Helper function to get writable output directory
+def get_output_directory():
+    """Get a writable directory for output files (handles macOS app bundle read-only issue)"""
+    # Try user's Documents folder first
+    docs_folder = os.path.expanduser('~/Documents/UCSC_Results')
+    try:
+        os.makedirs(docs_folder, exist_ok=True)
+        # Test if we can write to it
+        test_file = os.path.join(docs_folder, '.write_test')
+        with open(test_file, 'w') as f:
+            f.write('test')
+        os.remove(test_file)
+        return docs_folder
+    except:
+        pass
+    
+    # Fallback to Desktop
+    desktop = os.path.expanduser('~/Desktop')
+    if os.path.exists(desktop) and os.access(desktop, os.W_OK):
+        return desktop
+    
+    # Last resort: current working directory
+    return os.getcwd()
+
+# Get writable output directory
+OUTPUT_DIR = get_output_directory()
+
 # Default credentials
 DEFAULT_INDEX = '23000000'
 DEFAULT_NIC = '200300000000'
 LOGIN_URL = 'https://ucsc.cmb.ac.lk/student-portal/public/index.php/login'
 DASHBOARD_URL = 'https://ucsc.cmb.ac.lk/student-portal/public/index.php'
 RESULTS_URL = 'https://ucsc.cmb.ac.lk/student-portal/public/index.php/results'
-EXCEL_PATH = 'results.xlsx'
+EXCEL_PATH = os.path.join(OUTPUT_DIR, 'results.xlsx')
 CSV_PATH = 'student_credentials.csv'  # Expected format: index,nic,email
 CREDIT_CSV_PATH = 'credits.csv'  # Expected format: subject_code,credits
 
@@ -606,6 +633,11 @@ class ResultFetcherGUI:
     def save_ranked_excel(self, ranked_data):
         """Save results to Excel in rank order with GPA and all results"""
         excel_path = self.excel_var.get().strip()
+        
+        # Ensure we're saving to a writable location
+        if not os.path.isabs(excel_path):
+            excel_path = os.path.join(OUTPUT_DIR, excel_path)
+        
         print(f"\n--- Saving ranked results to Excel: {excel_path} ---")
         
         # Collect all subjects across all students
@@ -1206,6 +1238,10 @@ def fetch_results(index_number, nic, login_url, gui_instance=None):
 def update_excel(index_number, results, excel_path):
     """Function to update Excel file with fetched results"""
     try:
+        # Ensure we're saving to a writable location
+        if not os.path.isabs(excel_path):
+            excel_path = os.path.join(OUTPUT_DIR, excel_path)
+        
         # Make sure we have openpyxl installed
         try:
             import openpyxl
