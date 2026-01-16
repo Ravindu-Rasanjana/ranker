@@ -1171,9 +1171,21 @@ def fetch_results(index_number, nic, login_url, gui_instance=None):
                         subject_with_name = cols[0].text.strip()
                         grade = cols[4].text.strip()
                         
-                        # Store only subject code and grade (no credits from HTML)
-                        # Credits will be looked up from CSV later
-                        results[subject_with_name] = grade
+                        # Handle duplicate subjects - keep the highest grade
+                        if subject_with_name in results and subject_with_name != 'student_name':
+                            existing_grade = results[subject_with_name]
+                            current_points = get_grade_points(grade)
+                            existing_points = get_grade_points(existing_grade)
+                            
+                            if current_points > existing_points:
+                                logger.info(f"Duplicate found for {subject_with_name}: Replacing {existing_grade} with higher grade {grade}")
+                                results[subject_with_name] = grade
+                            else:
+                                logger.info(f"Duplicate found for {subject_with_name}: Keeping existing grade {existing_grade} over {grade}")
+                        else:
+                            # Store only subject code and grade (no credits from HTML)
+                            # Credits will be looked up from CSV later
+                            results[subject_with_name] = grade
         else:
             # If no table found, check for login errors
             error_msg = soup.find('div', {'class': 'alert-danger'})
